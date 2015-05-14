@@ -591,11 +591,26 @@ class DebraArm(Scara):
                 pos_prev = pos
                 vel_prev = vel
 
+                pos = RobotSpacePoint(x[1], y[1], z[1], grp[1])
+                vel = RobotSpacePoint(x[2], y[2], z[2], grp[2])
+
+
             # Rebuild original xyz trajectory
             traj_x.append((x[0], x[1], x[2], x[3]))
             traj_y.append((y[0], y[1], y[2], y[3]))
             traj_z.append((z[0], z[1], z[2], z[3]))
             traj_gripper.append((grp[0], grp[1], grp[2], grp[3]))
+
+        q1, q2, q3, q4 = self.get_path(pos_prev, vel_prev, pos, vel,
+                                       delta_t, t0, delta_tf)
+
+        for th1, th2, zz, th3 in zip(q1, q2, q3, q4):
+            traj_joint_th1.append((th1[0], th1[1], th1[2], th1[3]))
+            traj_joint_th2.append((th2[0], th2[1], th2[2], th2[3]))
+            traj_joint_z.append((zz[0], zz[1], zz[2], zz[3]))
+            traj_joint_th3.append((th3[0], th3[1], th3[2], th3[3]))
+            t0 = th1[0]
+
 
         return traj_joint_th1, traj_joint_th2, traj_joint_z, traj_joint_th3, \
                traj_x, traj_y, traj_z, traj_gripper

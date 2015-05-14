@@ -81,7 +81,7 @@ def main():
                     pth1, pth2, pz, pth3, px, py, pz, pgrp = \
                         arm.get_path_hybrid(tool_prev, RobotSpacePoint(0,0,0,0),
                                             tool, RobotSpacePoint(0,0,0,0),
-                                            DELTA_T, 20, 'all')
+                                            DELTA_T, 50, 'all')
                     elapsed_time = time.time() - start_time
                     print('elapsed time: ', elapsed_time)
                     graph_trajectory_xyz(px, py, pz, pgrp)
