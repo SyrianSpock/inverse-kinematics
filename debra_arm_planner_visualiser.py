@@ -15,7 +15,8 @@ RANGE_MAX = abs(L1 + L2)
 # Trajectory generation settings
 PLAN_ROBOT_SPACE = 1
 PLAN_JOINT_SPACE = 2
-MODE = PLAN_ROBOT_SPACE
+PLAN_HYBRID_SPACE = 3
+MODE = PLAN_HYBRID_SPACE
 DELTA_T = 0.01
 
 # Display settings
@@ -74,6 +75,17 @@ def main():
                                                         DELTA_T)
                     elapsed_time = time.time() - start_time
                     print('elapsed time: ', elapsed_time)
+                    graph_trajectory_joint(pth1, pth2, pth3)
+                elif MODE == PLAN_HYBRID_SPACE:
+                    start_time = time.time()
+                    pth1, pth2, pz, pth3, px, py, pz, pgrp = \
+                        arm.get_path_hybrid(tool_prev, RobotSpacePoint(0,0,0,0),
+                                            tool, RobotSpacePoint(0,0,0,0),
+                                            DELTA_T, 20, 'all')
+                    elapsed_time = time.time() - start_time
+                    print('elapsed time: ', elapsed_time)
+                    graph_trajectory_xyz(px, py, pz, pgrp)
+                    graph_trajectory_joint(pth1, pth2, pth3)
                 else:
                     start_time = time.time()
                     pth1, pth2, pz, pth3, px, py, pz, pgrp = \

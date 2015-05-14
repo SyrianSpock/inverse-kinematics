@@ -8,9 +8,9 @@ class DebraArm(Scara):
     "Kinematics and Inverse kinematics of an arm on Debra (3dof + hand)"
 
     def __init__(self, l1=1.0, l2=1.0,
-                 theta1_constraints=JointMinMaxConstraint(-pi,pi, -2,2, -1,1),
-                 theta2_constraints=JointMinMaxConstraint(-pi,pi, -2,2, -1,1),
-                 theta3_constraints=JointMinMaxConstraint(-pi,pi, -2,2, -1,1),
+                 theta1_constraints=JointMinMaxConstraint(-pi,pi, -5,5, -2,2),
+                 theta2_constraints=JointMinMaxConstraint(-pi,pi, -5,5, -2,2),
+                 theta3_constraints=JointMinMaxConstraint(-pi,pi, -5,5, -2,2),
                  z_constraints=JointMinMaxConstraint(0,1, -1,1, -1,1),
                  q0=JointSpacePoint(0,0,0,0),
                  origin=Vector3D(0,0,0),
@@ -170,58 +170,36 @@ class DebraArm(Scara):
                           [                 0,                  0, 1,  0], \
                           [ (c - d) * det_inv, -(a - b) * det_inv, 0, -1]])
 
-    def compute_jacobian_dot(self):
-        """
-        Returns jacobian derivative matrix at current state
-        """
-        d2x_dth1_2 = - self.l1 * np.cos(self.joints.theta1) \
-                  - self.l2 * np.cos(self.joints.theta1 + self.joints.theta2)
-        d2x_dth2_2 = - self.l2 * np.cos(self.joints.theta1 + self.joints.theta2)
-
-        d2y_dth1_2 = - self.l1 * np.sin(self.joints.theta1) \
-                  - self.l2 * np.sin(self.joints.theta1 + self.joints.theta2)
-        d2y_dth2_2 = - self.l2 * np.sin(self.joints.theta1 + self.joints.theta2)
-
-        return np.matrix([[d2x_dth1_2, d2x_dth2_2, 0,  0], \
-                          [d2y_dth1_2, d2y_dth2_2, 0,  0], \
-                          [         0,          0, 1,  0], \
-                          [        -1,         -1, 0, -1]])
-
     def get_tool_vel(self, joints_vel, jacobian):
         """
         Computes current tool velocity using jacobian
         """
-        joints_vel = np.matrix([[joints_vel.theta1], \
-                                [joints_vel.theta2], \
-                                [joints_vel.z], \
-                                [joints_vel.theta3]])
-        tool_vel = jacobian * joints_vel
+        x = jacobian[0,0] * joints_vel.theta1 + jacobian[0,1] * joints_vel.theta2
+        y = jacobian[1,0] * joints_vel.theta1 + jacobian[1,1] * joints_vel.theta2
+        z = joints_vel.z
+        grp = jacobian[3,0] * joints_vel.theta1 \
+              + jacobian[3,1] * joints_vel.theta2 \
+              + jacobian[3,3] * joints_vel.theta3
 
-        return RobotSpacePoint(float(tool_vel[0]), \
-                               float(tool_vel[1]), \
-                               float(tool_vel[2]), \
-                               float(tool_vel[3]))
+        return RobotSpacePoint(x, y, z, grp)
 
     def get_joints_vel(self, tool_vel, jacobian_inv):
         """
         Computes current tool velocity using jacobian
         """
-        tool_vel = np.matrix([[tool_vel.x], \
-                              [tool_vel.y], \
-                              [tool_vel.z], \
-                              [tool_vel.gripper_hdg]])
-
         if np.linalg.norm(tool_vel) < EPSILON:
             return JointSpacePoint(0, 0, 0, 0)
 
-        joints_vel = jacobian_inv * tool_vel
+        th1 = jacobian_inv[0,0] * tool_vel.x + jacobian_inv[0,1] * tool_vel.y
+        th2 = jacobian_inv[1,0] * tool_vel.x + jacobian_inv[1,1] * tool_vel.y
+        z = tool_vel.z
+        th3 = jacobian_inv[3,0] * tool_vel.x \
+              + jacobian_inv[3,1] * tool_vel.y \
+              + jacobian_inv[3,3] * tool_vel.gripper_hdg
 
-        return JointSpacePoint(float(joints_vel[0]), \
-                               float(joints_vel[1]), \
-                               float(joints_vel[2]), \
-                               float(joints_vel[3]))
+        return JointSpacePoint(th1, th2, z, th3)
 
-    def get_path(self, start_pos, start_vel, target_pos, target_vel, delta_t):
+    def get_path(self, start_pos, start_vel, target_pos, target_vel, delta_t, t0=0):
         """
         Generates a time optimal trajectory for the whole arm
         Input:
@@ -251,28 +229,32 @@ class DebraArm(Scara):
                                                  target_joints_pos.theta1,
                                                  target_joints_vel.theta1,
                                                  tf_sync,
-                                                 delta_t)
+                                                 delta_t,
+                                                 t0)
 
         traj_theta2 = self.theta2_joint.get_path(start_joints_pos.theta2,
                                                  start_joints_vel.theta2,
                                                  target_joints_pos.theta2,
                                                  target_joints_vel.theta2,
                                                  tf_sync,
-                                                 delta_t)
+                                                 delta_t,
+                                                 t0)
 
         traj_z = self.z_joint.get_path(start_joints_pos.z,
                                        start_joints_vel.z,
                                        target_joints_pos.z,
                                        target_joints_vel.z,
                                        tf_sync,
-                                       delta_t)
+                                       delta_t,
+                                       t0)
 
         traj_theta3 = self.theta3_joint.get_path(start_joints_pos.theta3,
                                                  start_joints_vel.theta3,
                                                  target_joints_pos.theta3,
                                                  target_joints_vel.theta3,
                                                  tf_sync,
-                                                 delta_t)
+                                                 delta_t,
+                                                 t0)
 
         return traj_theta1, traj_theta2, traj_z, traj_theta3
 
@@ -462,28 +444,155 @@ class DebraArm(Scara):
         """
         delta_x = abs(target_pos.x - start_pos.x)
         delta_y = abs(target_pos.y - start_pos.y)
-
         delta_s = np.sqrt(delta_x ** 2 + delta_y ** 2)
 
-        coef_x = delta_x / delta_s
-        coef_y = delta_y / delta_s
+        if abs(delta_s) > EPSILON:
+            coef_x = delta_x / delta_s
+            coef_y = delta_y / delta_s
 
-        if coef_x > EPSILON:
-            self.x_axis.set_constraints(
-                self.x_axis.constraints._replace(
-                    vel_min=(self.path_constraints.vel_min * coef_x),
-                    vel_max=(self.path_constraints.vel_max * coef_x),
-                    acc_min=(self.path_constraints.acc_min * coef_x),
-                    acc_max=(self.path_constraints.acc_max * coef_x)
+            if coef_x > EPSILON:
+                self.x_axis.set_constraints(
+                    self.x_axis.constraints._replace(
+                        vel_min=(self.path_constraints.vel_min * coef_x),
+                        vel_max=(self.path_constraints.vel_max * coef_x),
+                        acc_min=(self.path_constraints.acc_min * coef_x),
+                        acc_max=(self.path_constraints.acc_max * coef_x)
+                        )
                     )
-                )
 
-        if coef_y > EPSILON:
-            self.y_axis.set_constraints(
-                self.y_axis.constraints._replace(
-                    vel_min=(self.path_constraints.vel_min * coef_y),
-                    vel_max=(self.path_constraints.vel_max * coef_y),
-                    acc_min=(self.path_constraints.acc_min * coef_y),
-                    acc_max=(self.path_constraints.acc_max * coef_y)
+            if coef_y > EPSILON:
+                self.y_axis.set_constraints(
+                    self.y_axis.constraints._replace(
+                        vel_min=(self.path_constraints.vel_min * coef_y),
+                        vel_max=(self.path_constraints.vel_max * coef_y),
+                        acc_min=(self.path_constraints.acc_min * coef_y),
+                        acc_max=(self.path_constraints.acc_max * coef_y)
+                        )
                     )
-                )
+
+    def get_path_hybrid(self, start_pos, start_vel, target_pos, target_vel, delta_t,
+                        control_int, output='joint'):
+        """
+        Generates a trajectory for the whole arm in joint space using control points
+        Input:
+        start_pos  - start position in tool space
+        start_vel  - start velocity in tool space
+        target_pos - target position in tool space
+        target_vel - target velocity in tool space
+        delta_t    - time step
+        control_int - interval between two control points
+        output     - select between tool space and joint space trajectories
+        """
+        # Project constraints on the path to constraints on the axis
+        self.path_to_axis_constraint(start_pos, target_pos)
+
+        # Determine current (start) state and final (target) state
+        start_joints_pos = self.inverse_kinematics(start_pos)
+        jacobian_inv = self.compute_jacobian_inv()
+        start_joints_vel = self.get_joints_vel(start_vel, jacobian_inv)
+
+        target_joints_pos = self.inverse_kinematics(target_pos)
+        jacobian_inv = self.compute_jacobian_inv()
+        target_joints_vel = self.get_joints_vel(target_vel, jacobian_inv)
+
+        # Get synchronisation time
+        tf_sync = self.sync_time_xyz(start_pos, start_vel, target_pos, target_vel)
+
+        # Get trajectories for each joint
+        traj_x = self.x_axis.get_path(start_pos.x,
+                                      start_vel.x,
+                                      target_pos.x,
+                                      target_vel.x,
+                                      tf_sync,
+                                      delta_t)
+
+        traj_y = self.y_axis.get_path(start_pos.y,
+                                      start_vel.y,
+                                      target_pos.y,
+                                      target_vel.y,
+                                      tf_sync,
+                                      delta_t)
+
+        traj_z = self.z_axis.get_path(start_pos.z,
+                                      start_vel.z,
+                                      target_pos.z,
+                                      target_vel.z,
+                                      tf_sync,
+                                      delta_t)
+
+        traj_gripper = self.gripper_axis.get_path(start_pos.gripper_hdg,
+                                                  start_vel.gripper_hdg,
+                                                  target_pos.gripper_hdg,
+                                                  target_vel.gripper_hdg,
+                                                  tf_sync,
+                                                  delta_t)
+
+        th1, th2, z, th3, px, py, pz, pgrp = \
+            self.xyz_to_hybrid_trajectory(traj_x, traj_y, traj_z, traj_gripper,
+                                          delta_t, control_int)
+
+        if output == 'robot' or output == 'tool':
+            return px, py, pz, pgrp
+        elif output == 'all' or output == 'both':
+            return th1, th2, z, th3, px, py, pz, pgrp
+        else:
+            return th1, th2, z, th3
+
+    def xyz_to_hybrid_trajectory(self, points_x, points_y, points_z, points_gripper,
+                                 delta_t, control_int=1):
+        """
+        Convert trajectory from robot space to joint space using control points
+        """
+        traj_x = []
+        traj_y = []
+        traj_z = []
+        traj_gripper = []
+
+        traj_joint_th1 = []
+        traj_joint_th2 = []
+        traj_joint_th3 = []
+        traj_joint_z = []
+
+        i = 0
+        j = 0
+        for x, y, z, grp in zip(points_x, points_y, points_z, points_gripper):
+            i += 1
+
+            # Get first point
+            if j == 0:
+                j += 1
+                i = 0
+                t0 = 0
+                pos_prev = RobotSpacePoint(x[1], y[1], z[1], grp[1])
+                vel_prev = RobotSpacePoint(x[2], y[2], z[2], grp[2])
+
+            # Get control point and compute joint trajectory
+            if i == control_int:
+                i = 0
+                pos = RobotSpacePoint(x[1], y[1], z[1], grp[1])
+                vel = RobotSpacePoint(x[2], y[2], z[2], grp[2])
+
+                q1, q2, q3, q4 = self.get_path(pos_prev, vel_prev, pos, vel, delta_t, t0)
+
+                for th1, th2, zz, th3 in zip(q1, q2, q3, q4):
+                    print(th1[0])
+                    traj_joint_th1.append((th1[0], th1[1], th1[2], th1[3]))
+                    traj_joint_th2.append((th2[0], th2[1], th2[2], th2[3]))
+                    traj_joint_z.append((zz[0], zz[1], zz[2], zz[3]))
+                    traj_joint_th3.append((th3[0], th3[1], th3[2], th3[3]))
+
+                t0 = th1[0]
+                pos_prev = self.forward_kinematics(
+                    JointSpacePoint(th1[1], th2[1], zz[1], th3[1]))
+                jacobian = self.compute_jacobian()
+                vel_prev = self.get_tool_vel(
+                    JointSpacePoint(th1[2], th2[2], zz[2], th3[2]), jacobian)
+
+            # Rebuild original xyz trajectory
+            traj_x.append((x[0], x[1], x[2], x[3]))
+            traj_y.append((y[0], y[1], y[2], y[3]))
+            traj_z.append((z[0], z[1], z[2], z[3]))
+            traj_gripper.append((grp[0], grp[1], grp[2], grp[3]))
+
+        return traj_joint_th1, traj_joint_th2, traj_joint_z, traj_joint_th3, \
+               traj_x, traj_y, traj_z, traj_gripper

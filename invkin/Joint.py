@@ -29,7 +29,7 @@ class Joint(object):
 
         return TRUE
 
-    def get_path(self, pos_i, vel_i, pos_f, vel_f, tf_sync, delta_t):
+    def get_path(self, pos_i, vel_i, pos_f, vel_f, tf_sync, delta_t, t0=0):
         """
         Generates a time optimal trajectory
         Input:
@@ -60,15 +60,15 @@ class Joint(object):
         # Determine shape of trajectory
         if tf_sync < tf_lim or (vel_i == 0 and vel_f == 0):
             traj = self.trapezoidal_profile(pos_i, vel_i, pos_f, vel_f,
-                                            tf_sync, tf_lim, delta_t)
+                                            tf_sync, tf_lim, delta_t, t0)
         else:
             traj = self.doubleramp_profile(pos_i, vel_i, pos_f, vel_f,
-                                           tf_sync, tf_lim, delta_t)
+                                           tf_sync, tf_lim, delta_t, t0)
 
         return traj
 
     def trapezoidal_profile(self, pos_i, vel_i, pos_f, vel_f,
-                            tf_sync, tf_lim, delta_t):
+                            tf_sync, tf_lim, delta_t, t0):
         """
         Generate a trapezoidal profile to reach target
         """
@@ -88,10 +88,10 @@ class Joint(object):
                                 - 2 * (vel_i - vel_f)**2))
 
         return self.generic_profile(pos_i, vel_i, pos_f, vel_f,
-                                    tf_sync, tf_lim, delta_t, sign_traj, 1, vel_c)
+                                    tf_sync, tf_lim, delta_t, sign_traj, 1, vel_c, t0)
 
     def doubleramp_profile(self, pos_i, vel_i, pos_f, vel_f,
-                           tf_sync, tf_lim, delta_t):
+                           tf_sync, tf_lim, delta_t, t0):
         """
         Generate a double ramp profile to reach target
         """
@@ -109,10 +109,10 @@ class Joint(object):
                 / (tf_sync - ((vel_i  - vel_f) / (sign_traj * constraint.acc_max)))
 
         return self.generic_profile(pos_i, vel_i, pos_f, vel_f,
-                                    tf_sync, tf_lim, delta_t, sign_traj, 1, vel_c)
+                                    tf_sync, tf_lim, delta_t, sign_traj, 1, vel_c, t0)
 
     def generic_profile(self, pos_i, vel_i, pos_f, vel_f,
-                        tf_sync, tf_lim, delta_t, sign_traj, sign_sync, vel_c):
+                        tf_sync, tf_lim, delta_t, sign_traj, sign_sync, vel_c, t0):
         """
         Generate a generic profile (valid for trapezoidal and double ramp)
         """
@@ -121,6 +121,15 @@ class Joint(object):
         # Equation 35
         t1 = (sign_traj * vel_c - vel_i) / (sign_traj * constraint.acc_max)
         t2 = tf_sync - abs(vel_c - vel_f) / constraint.acc_max
+
+        print(t0, t1, t2, tf_sync)
+
+        if t1 < 0:
+            t1 = 0
+        if t2 < t1:
+            t2 = t1
+        if tf_sync < t2:
+            t2 = tf_sync
 
         # First piece
         a0 = float(pos_i)
@@ -147,7 +156,7 @@ class Joint(object):
             self.polynomial_piece_profile([a2, a1, a0], t2, tf_sync+delta_t, delta_t)
 
         # Combine piecewise trajectory
-        time = np.concatenate((time_1, time_2, time_3), axis=0)
+        time = np.concatenate((time_1, time_2, time_3), axis=0) + t0
         traj_pos = np.concatenate((traj_pos_1, traj_pos_2, traj_pos_3), axis=0)
         traj_vel = np.concatenate((traj_vel_1, traj_vel_2, traj_vel_3), axis=0)
         traj_acc = np.concatenate((traj_acc_1, traj_acc_2, traj_acc_3), axis=0)
