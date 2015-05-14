@@ -1,6 +1,7 @@
 from invkin.Datatypes import *
 from invkin.Joint import Joint
 from invkin.Scara import Scara
+import time
 import numpy as np
 
 class DebraArm(Scara):
@@ -407,15 +408,30 @@ class DebraArm(Scara):
         traj_joint_th3 = []
         traj_joint_z = []
 
+        timing_invkin = []
+        timing_jacob_inv = []
+        timing_comp_vel = []
+        timing_comp_acc = []
+
         for x, y, z, grp in zip(points_x, points_y, points_z, points_gripper):
             pos = RobotSpacePoint(x[1], y[1], z[1], grp[1])
             vel = RobotSpacePoint(x[2], y[2], z[2], grp[2])
             acc = RobotSpacePoint(x[3], y[3], z[3], grp[3])
 
+            t_0 = time.time()
             joints_pos = self.inverse_kinematics(pos)
+            t_1 = time.time()
             jacobian_inv = self.compute_jacobian_inv()
+            t_2 = time.time()
             joints_vel = self.get_joints_vel(vel, jacobian_inv)
+            t_3 = time.time()
             joints_acc = self.get_joints_vel(acc, jacobian_inv)
+            t_4 = time.time()
+
+            timing_invkin.append(t_1 - t_0)
+            timing_jacob_inv.append(t_2 - t_1)
+            timing_comp_vel.append(t_3 - t_2)
+            timing_comp_acc.append(t_4 - t_3)
 
             traj_joint_th1.append((x[0], joints_pos[0], joints_vel[0], joints_acc[0]))
             traj_joint_th2.append((x[0], joints_pos[1], joints_vel[1], joints_acc[1]))
@@ -427,6 +443,15 @@ class DebraArm(Scara):
             traj_y.append((y[0], y[1], y[2], y[3]))
             traj_z.append((z[0], z[1], z[2], z[3]))
             traj_gripper.append((grp[0], grp[1], grp[2], grp[3]))
+
+        print('Inverse kinematics took:', int(np.mean(timing_invkin) * 1e9), 'ns',
+              '+/-', int(np.std(timing_invkin) * 1e9), 'ns')
+        print('Jacobian inverse took:', int(np.mean(timing_jacob_inv) * 1e9), 'ns',
+              '+/-', int(np.std(timing_jacob_inv) * 1e9), 'ns')
+        print('Joints velocity took:', int(np.mean(timing_comp_vel) * 1e9), 'ns',
+              '+/-', int(np.std(timing_comp_vel) * 1e9), 'ns')
+        print('Joints acceleration took:', int(np.mean(timing_comp_acc) * 1e9), 'ns',
+              '+/-', int(np.std(timing_comp_acc) * 1e9), 'ns')
 
         return traj_joint_th1, traj_joint_th2, traj_joint_z, traj_joint_th3, \
                traj_x, traj_y, traj_z, traj_gripper
