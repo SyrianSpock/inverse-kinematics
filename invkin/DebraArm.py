@@ -8,9 +8,9 @@ class DebraArm(Scara):
     "Kinematics and Inverse kinematics of an arm on Debra (3dof + hand)"
 
     def __init__(self, l1=1.0, l2=1.0,
-                 theta1_constraints=JointMinMaxConstraint(-pi,pi, -5,5, -2,2),
-                 theta2_constraints=JointMinMaxConstraint(-pi,pi, -5,5, -2,2),
-                 theta3_constraints=JointMinMaxConstraint(-pi,pi, -5,5, -2,2),
+                 theta1_constraints=JointMinMaxConstraint(-pi,pi, -10,10, -5,5),
+                 theta2_constraints=JointMinMaxConstraint(-pi,pi, -10,10, -5,5),
+                 theta3_constraints=JointMinMaxConstraint(-pi,pi, -10,10, -5,5),
                  z_constraints=JointMinMaxConstraint(0,1, -1,1, -1,1),
                  q0=JointSpacePoint(0,0,0,0),
                  origin=Vector3D(0,0,0),
@@ -199,7 +199,8 @@ class DebraArm(Scara):
 
         return JointSpacePoint(th1, th2, z, th3)
 
-    def get_path(self, start_pos, start_vel, target_pos, target_vel, delta_t, t0=0):
+    def get_path(self, start_pos, start_vel, target_pos, target_vel,
+                 delta_t, t0=0, tf=0):
         """
         Generates a time optimal trajectory for the whole arm
         Input:
@@ -218,10 +219,13 @@ class DebraArm(Scara):
         target_joints_vel = self.get_joints_vel(target_vel, jacobian_inv)
 
         # Get synchronisation time
-        tf_sync = self.synchronisation_time(start_joints_pos,
-                                            start_joints_vel,
-                                            target_joints_pos,
-                                            target_joints_vel)
+        if tf == 0:
+            tf_sync = self.synchronisation_time(start_joints_pos,
+                                                start_joints_vel,
+                                                target_joints_pos,
+                                                target_joints_vel)
+        else:
+            tf_sync = tf
 
         # Get trajectories for each joint
         traj_theta1 = self.theta1_joint.get_path(start_joints_pos.theta1,
@@ -553,6 +557,8 @@ class DebraArm(Scara):
         traj_joint_th3 = []
         traj_joint_z = []
 
+        delta_tf = delta_t * control_int
+
         i = 0
         j = 0
         for x, y, z, grp in zip(points_x, points_y, points_z, points_gripper):
@@ -572,21 +578,18 @@ class DebraArm(Scara):
                 pos = RobotSpacePoint(x[1], y[1], z[1], grp[1])
                 vel = RobotSpacePoint(x[2], y[2], z[2], grp[2])
 
-                q1, q2, q3, q4 = self.get_path(pos_prev, vel_prev, pos, vel, delta_t, t0)
+                q1, q2, q3, q4 = self.get_path(pos_prev, vel_prev, pos, vel,
+                                               delta_t, t0, delta_tf)
 
                 for th1, th2, zz, th3 in zip(q1, q2, q3, q4):
-                    print(th1[0])
                     traj_joint_th1.append((th1[0], th1[1], th1[2], th1[3]))
                     traj_joint_th2.append((th2[0], th2[1], th2[2], th2[3]))
                     traj_joint_z.append((zz[0], zz[1], zz[2], zz[3]))
                     traj_joint_th3.append((th3[0], th3[1], th3[2], th3[3]))
+                    t0 = th1[0]
 
-                t0 = th1[0]
-                pos_prev = self.forward_kinematics(
-                    JointSpacePoint(th1[1], th2[1], zz[1], th3[1]))
-                jacobian = self.compute_jacobian()
-                vel_prev = self.get_tool_vel(
-                    JointSpacePoint(th1[2], th2[2], zz[2], th3[2]), jacobian)
+                pos_prev = pos
+                vel_prev = vel
 
             # Rebuild original xyz trajectory
             traj_x.append((x[0], x[1], x[2], x[3]))
