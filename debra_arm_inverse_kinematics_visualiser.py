@@ -2,6 +2,7 @@ import pygame, sys
 from pickit.Datatypes import *
 from pickit import DebraArm
 from math import cos, sin, pi
+from pygame_utils import *
 
 PX_PER_METER = 100
 L1 = 1.5
@@ -70,23 +71,6 @@ def main():
             draw_arm(origin, p1, p2, p3)
 
             pygame.display.update()
-
-def draw_arm(p0, p1, p2, p3):
-    "draw arm state"
-
-    draw_line(p0.x, p0.y, p1.x, p1.y)
-    draw_line(p1.x, p1.y, p2.x, p2.y)
-    draw_line(p2.x, p2.y, p3.x, p3.y)
-
-def draw_line(pos1_x, pos1_y, pos2_x, pos2_y):
-    "draw line from pos1 to pos2"
-    pygame.draw.line(SCREEN,
-                     CYAN,
-                     (int(pos1_x * PX_PER_METER + WIDTH/2),
-                      int(-pos1_y * PX_PER_METER + HEIGHT/2)),
-                     (int(pos2_x * PX_PER_METER + WIDTH/2),
-                      int(-pos2_y * PX_PER_METER + HEIGHT/2)),
-                     2)
 
 if __name__ == "__main__":
     main()

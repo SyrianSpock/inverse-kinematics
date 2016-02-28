@@ -1,6 +1,8 @@
-Kinematics for arm manipulators - Pick it
-=========================================
-Computes forward and inverse kinematics of robotic arms including Debra's arms.
+Pick it: Time-optimal trajectory generator for arm manipulators
+===============================================================
+
+- Computes forward and inverse kinematics
+- Generates time-optimal trajectories considering kinematics only
 
 ## Demo
 A visual demo using pygame gets the position of your cursor, sets it as tool position and allows you to see the arm reconstructed through inverse kinematics.
